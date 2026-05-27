@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-Commerce</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .hidden { display: none; }
+        input, select, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+        button { background: #2874f0; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #1a5ac6; }
+        .grid { display: flex; gap: 20px; flex-wrap: wrap; }
+        .card { border: 1px solid #ddd; padding: 10px; text-align: center; border-radius: 5px; width: 220px; }
+        .card img { max-width: 100%; border-radius: 5px; height: 150px; object-fit: cover; }
+        .order-card { background: #fff3cd; padding: 10px; border-left: 5px solid #ffc107; margin-bottom: 10px; }
+        .logout { background: #dc3545; width: auto; float: right; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="auth-section">
+    <h2>Welcome to Mini-Commerce</h2>
+    <div style="display: flex; gap: 20px;">
+        <div style="flex: 1;">
+            <h3>Login</h3>
+            <input type="text" id="login-user" placeholder="Username">
+            <input type="password" id="login-pass" placeholder="Password">
+            <button onclick="login()">Login</button>
+        </div>
+        <div style="flex: 1;">
+            <h3>Register</h3>
+            <input type="text" id="reg-user" placeholder="Username">
+            <input type="password" id="reg-pass" placeholder="Password">
+            <select id="reg-role">
+                <option value="purchaser">Purchaser</option>
+                <option value="seller">Seller</option>
+            </select>
+            <button onclick="register()">Register</button>
+        </div>
+    </div>
+</div>
+
+<div class="container hidden" id="app-section">
+    <button class="logout" onclick="logout()">Logout</button>
+    <h2 id="welcome-msg"></h2>
+
+    <div id="purchaser-dashboard" class="hidden">
+        <h3>Available Products</h3>
+        <div class="grid" id="product-list"></div>
+    </div>
+
+    <div id="seller-dashboard" class="hidden">
+        <h3>Incoming Orders (Notifications)</h3>
+        <button onclick="fetchOrders()" style="background: #28a745; width: auto; margin-bottom: 10px;">Refresh Notifications</button>
+        <div id="order-list"></div>
+    </div>
+</div>
+
+<script>
+    let currentUser = null;
+
+    async function register() {
+        const username = document.getElementById('reg-user').value;
+        const password = document.getElementById('reg-pass').value;
+        const role = document.getElementById('reg-role').value;
+
+        const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, role })
+        });
+        const data = await res.json();
+        alert(data.message);
+    }
+
+    async function login() {
+        const username = document.getElementById('login-user').value;
+        const password = document.getElementById('login-pass').value;
+
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        
+        if (res.ok) {
+            const data = await res.json();
+            currentUser = data;
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('app-section').classList.remove('hidden');
+            document.getElementById('welcome-msg').innerText = `Welcome, ${data.username} (${data.role})`;
+            
+            if (data.role === 'purchaser') {
+                document.getElementById('purchaser-dashboard').classList.remove('hidden');
+                document.getElementById('seller-dashboard').classList.add('hidden');
+                fetchProducts();
+            } else {
+                document.getElementById('seller-dashboard').classList.remove('hidden');
+                document.getElementById('purchaser-dashboard').classList.add('hidden');
+                fetchOrders();
+            }
+        } else {
+            alert("Invalid credentials");
+        }
+    }
+
+    function logout() {
+        currentUser = null;
+        document.getElementById('auth-section').classList.remove('hidden');
+        document.getElementById('app-section').classList.add('hidden');
+    }
+
+    async function fetchProducts() {
+        const res = await fetch('/api/products');
+        const products = await res.json();
+        const list = document.getElementById('product-list');
+        list.innerHTML = '';
+        
+        products.forEach(p => {
+            list.innerHTML += `
+                <div class="card">
+                    <img src="${p.image}" alt="${p.name}">
+                    <h4>${p.name}</h4>
+                    <p>${p.price}</p>
+                    <button onclick="buyProduct(${p.id})">Buy Now</button>
+                </div>
+            `;
+        });
+    }
+
+    async function buyProduct(productId) {
+        const res = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ purchaser: currentUser.username, productId })
+        });
+        const data = await res.json();
+        alert(data.message);
+    }
+
+    async function fetchOrders() {
+        const res = await fetch('/api/orders');
+        const orders = await res.json();
+        const list = document.getElementById('order-list');
+        list.innerHTML = '';
+        
+        if (orders.length === 0) list.innerHTML = "<p>No orders yet.</p>";
+        
+        orders.forEach(o => {
+            list.innerHTML += `
+                <div class="order-card">
+                    <strong>Order ID:</strong> #${o.orderId} <br>
+                    <strong>Buyer:</strong> ${o.purchaser} <br>
+                    <strong>Item:</strong> ${o.productName} (${o.price}) <br>
+                    <small>Time: ${o.date}</small>
+                </div>
+            `;
+        });
+    }
+</script>
+</body>
+</html>
